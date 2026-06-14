@@ -1,7 +1,7 @@
 #include "AppController.h"
 
 AppController::AppController(QObject* parent)
-    : QObject(parent), m_mode(Mode::LIVE) {
+    : QObject(parent), m_mode(Mode::LIVE), m_hasLatestFrame(false) {
     m_timer = new QTimer(this);
     connect(m_timer, &QTimer::timeout, this, &AppController::processFrame);
     // 33 ms is approximately 30 FPS
@@ -15,11 +15,6 @@ AppController::~AppController() {
 void AppController::receiveDataFrame(const DataFrame& frame) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_queue.push(frame);
-
-    // Bound the queue to prevent infinite growth. 10 frames is plenty.
-    while (m_queue.size() > 10) {
-        m_queue.pop();
-    }
 }
 
 void AppController::setMode(Mode mode) {
@@ -29,30 +24,39 @@ void AppController::setMode(Mode mode) {
         // Clear the buffer when switching modes
         std::queue<DataFrame> empty;
         std::swap(m_queue, empty);
+        m_hasLatestFrame = false;
     }
 }
 
 AppController::Mode AppController::getMode() const {
-    return m_mode; // No lock needed for simple read, but could lock if needed
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_mode;
+}
+
+bool AppController::getLatestFrame(DataFrame& outFrame) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_hasLatestFrame) {
+        outFrame = m_latestFrame;
+        return true;
+    }
+    return false;
 }
 
 void AppController::processFrame() {
-    DataFrame latestFrame;
-    bool hasData = false;
+    std::queue<DataFrame> localQueue;
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (!m_queue.empty()) {
-            hasData = true;
-            // Pop all frames and keep the latest one
-            while (!m_queue.empty()) {
-                latestFrame = m_queue.front();
-                m_queue.pop();
-            }
+        std::swap(m_queue, localQueue);
+
+        if (!localQueue.empty()) {
+            m_latestFrame = localQueue.back();
+            m_hasLatestFrame = true;
         }
     }
 
-    if (hasData) {
-        emit dataUpdated(latestFrame);
+    while (!localQueue.empty()) {
+        emit dataUpdated(localQueue.front());
+        localQueue.pop();
     }
 }

@@ -23,6 +23,9 @@ public:
     void setMode(Mode mode);
     Mode getMode() const;
 
+    // Retrieves the latest frame. Returns true if a frame exists.
+    bool getLatestFrame(DataFrame& outFrame) const;
+
 signals:
     void dataUpdated(const DataFrame& frame);
 
@@ -32,8 +35,11 @@ private slots:
 private:
     Mode m_mode;
     std::queue<DataFrame> m_queue;
-    std::mutex m_mutex;
+    mutable std::mutex m_mutex;
     QTimer* m_timer;
+
+    DataFrame m_latestFrame;
+    bool m_hasLatestFrame;
 };
 
 #endif // APPCONTROLLER_H
