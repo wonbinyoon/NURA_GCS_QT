@@ -52,6 +52,9 @@ std::vector<uint8_t> TelemetrySimulator::generateFrame() {
     double ticks_per_frame = ticks_per_sec / output_rate_hz_;
 
     exact_ticks_ += ticks_per_frame;
+    if (exact_ticks_ >= 65536.0) {
+        exact_ticks_ -= 65536.0;
+    }
     timestamp_ticks_ = static_cast<uint16_t>(exact_ticks_);
 
     // Little Endian packing
