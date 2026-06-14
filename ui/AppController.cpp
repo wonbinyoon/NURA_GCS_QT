@@ -25,6 +25,8 @@ void AppController::setMode(Mode mode) {
         std::queue<DataFrame> empty;
         std::swap(m_queue, empty);
         m_hasLatestFrame = false;
+
+        emit logMessage(QString("Switched mode to %1").arg(mode == Mode::LIVE ? "LIVE" : "REPLAY"));
     }
 }
 
@@ -59,4 +61,39 @@ void AppController::processFrame() {
         emit dataUpdated(localQueue.front());
         localQueue.pop();
     }
+}
+
+void AppController::connectSerial(const QString& port, int baudrate) {
+    emit logMessage(QString("Requesting serial connection on %1 at %2 bps").arg(port).arg(baudrate));
+    emit serialConnectRequested(port, baudrate);
+}
+
+void AppController::disconnectSerial() {
+    emit logMessage("Requesting serial disconnect");
+    emit serialDisconnectRequested();
+}
+
+void AppController::playReplay() {
+    emit logMessage("Requesting replay play");
+    emit replayPlayRequested();
+}
+
+void AppController::pauseReplay() {
+    emit logMessage("Requesting replay pause");
+    emit replayPauseRequested();
+}
+
+void AppController::stopReplay() {
+    emit logMessage("Requesting replay stop");
+    emit replayStopRequested();
+}
+
+void AppController::seekReplay(int timestamp) {
+    emit logMessage(QString("Requesting replay seek to timestamp %1").arg(timestamp));
+    emit replaySeekRequested(timestamp);
+}
+
+void AppController::setReplaySpeed(double speed) {
+    emit logMessage(QString("Requesting replay speed change to %1x").arg(speed));
+    emit replaySpeedChanged(speed);
 }
