@@ -23,6 +23,8 @@ add_library(AppControllerLib STATIC
     ui/View3D.h
     ui/OrientationPanel.cpp
     ui/OrientationPanel.h
+    ui/MapView.cpp
+    ui/MapView.h
 )
 
 target_link_libraries(AppControllerLib PRIVATE Qt6::Core Qt6::Widgets Qt6::SerialPort Qt6::Charts Qt6::3DCore Qt6::3DRender Qt6::3DExtras)
