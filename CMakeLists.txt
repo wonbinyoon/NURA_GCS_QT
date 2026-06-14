@@ -15,6 +15,8 @@ add_library(AppControllerLib STATIC
     ui/MainWindow.h
     ui/SerialController.cpp
     ui/SerialController.h
+    ui/ReplayController.cpp
+    ui/ReplayController.h
 )
 
 target_link_libraries(AppControllerLib PRIVATE Qt6::Core Qt6::Widgets Qt6::SerialPort)
