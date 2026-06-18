@@ -11,6 +11,7 @@
 #include <Qt3DCore/QTransform>
 #include <Qt3DRender/QCamera>
 #include <Qt3DRender/QPointLight>
+#include <QQuaternion>
 
 View3D::View3D(QWidget* parent)
     : QWidget(parent), m_pointsDrawn(0) {
@@ -78,8 +79,14 @@ void View3D::setupScene() {
     m_rocketTransform = new Qt3DCore::QTransform();
     m_rocketTransform->setTranslation(QVector3D(0.0f, 0.0f, 0.0f));
 
-    m_rocketEntity->addComponent(m_rocketMesh);
-    m_rocketEntity->addComponent(m_rocketMaterial);
+    // Rotate cone to align with Z axis forward
+    Qt3DCore::QTransform* preTransform = new Qt3DCore::QTransform();
+    preTransform->setRotationX(90.0f);
+    Qt3DCore::QEntity* visualEntity = new Qt3DCore::QEntity(m_rocketEntity);
+    visualEntity->addComponent(m_rocketMesh);
+    visualEntity->addComponent(m_rocketMaterial);
+    visualEntity->addComponent(preTransform);
+
     m_rocketEntity->addComponent(m_rocketTransform);
 }
 
@@ -99,17 +106,21 @@ void View3D::onTimerTick() {
     if (localBuffer.empty()) return;
 
     QVector3D latestPos;
+    QQuaternion latestQuat;
 
     for (const auto& frame : localBuffer) {
-        // Map NED (North, East, Down) to Qt3D (X, Y, Z)
-        // Usually: North = X, East = -Z, Down = -Y (so Up = Y)
-        // Adjusting mapping based on standard rules: North=X, East=Z, Down=-Y
         float x = frame.position_ned[0]; // North
         float z = frame.position_ned[1]; // East
         float y = -frame.position_ned[2]; // Down -> -Y (so Y is Up)
 
         QVector3D pos(x, y, z);
         latestPos = pos;
+
+        // Quat [w, x, y, z] mapped. For NED to Qt3D mapping:
+        // We assume frame.quat[0] = w.
+        QQuaternion q(frame.quat[0], frame.quat[1], frame.quat[2], frame.quat[3]);
+        q.normalize();
+        latestQuat = q;
 
         // Spawn a trajectory point periodically (e.g. every 10 frames)
         if (m_pointsDrawn % 10 == 0) {
@@ -120,6 +131,7 @@ void View3D::onTimerTick() {
 
     // Update rocket transform
     m_rocketTransform->setTranslation(latestPos);
+    m_rocketTransform->setRotation(latestQuat);
 
     // Update camera if follow mode is active
     if (m_followModeCheckbox->isChecked()) {

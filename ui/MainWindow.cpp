@@ -1,6 +1,6 @@
 #include "MainWindow.h"
 #include <QVBoxLayout>
-#include <QSplitter>
+#include <QHBoxLayout>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
@@ -20,41 +20,39 @@ MainWindow::MainWindow(QWidget* parent)
 
     m_consolePanel = new ConsolePanel(this);
 
-    // Left Control Panel Layout
-    QWidget* controlPanelWidget = new QWidget(this);
-    QVBoxLayout* controlPanelLayout = new QVBoxLayout(controlPanelWidget);
-    controlPanelLayout->addWidget(m_serialController);
-    controlPanelLayout->addWidget(m_replayController);
-    controlPanelLayout->addWidget(m_statusPanel);
-    controlPanelLayout->addStretch();
+    // Top Controls
+    QWidget* topControls = new QWidget(this);
+    QHBoxLayout* topLayout = new QHBoxLayout(topControls);
+    topLayout->addWidget(m_serialController);
+    topLayout->addWidget(m_replayController);
+    topLayout->addStretch();
 
-    // Right Visualization Area Layout
-    m_tabWidget = new QTabWidget(this);
-    m_tabWidget->addTab(m_plotPanel, "Plots");
-    m_tabWidget->addTab(m_view3D, "3D View");
-    m_tabWidget->addTab(m_orientationPanel, "Orientation");
-    m_tabWidget->addTab(m_mapView, "Map");
+    // Middle Splitter
+    QSplitter* middleSplitter = new QSplitter(Qt::Horizontal, this);
+    middleSplitter->addWidget(m_plotPanel);
+    middleSplitter->addWidget(m_view3D);
+    middleSplitter->addWidget(m_orientationPanel);
 
-    // Bottom Console Layout
-    QWidget* consoleWidget = new QWidget(this);
-    QVBoxLayout* consoleLayout = new QVBoxLayout(consoleWidget);
-    consoleLayout->addWidget(m_consolePanel);
+    // Lower Splitter
+    QSplitter* lowerSplitter = new QSplitter(Qt::Horizontal, this);
+    lowerSplitter->addWidget(m_mapView);
+    lowerSplitter->addWidget(m_statusPanel);
 
-    // Set up splitters
-    QSplitter* topSplitter = new QSplitter(Qt::Horizontal, this);
-    topSplitter->addWidget(controlPanelWidget);
-    topSplitter->addWidget(m_tabWidget);
-    topSplitter->setStretchFactor(0, 1);
-    topSplitter->setStretchFactor(1, 4);
-
+    // Main Splitter
     QSplitter* mainSplitter = new QSplitter(Qt::Vertical, this);
-    mainSplitter->addWidget(topSplitter);
-    mainSplitter->addWidget(consoleWidget);
-    mainSplitter->setStretchFactor(0, 4);
-    mainSplitter->setStretchFactor(1, 1);
+    mainSplitter->addWidget(topControls);
+    mainSplitter->addWidget(middleSplitter);
+    mainSplitter->addWidget(lowerSplitter);
+    mainSplitter->addWidget(m_consolePanel);
+
+    // Set stretch factors
+    mainSplitter->setStretchFactor(0, 0); // Controls (fixed height ideally)
+    mainSplitter->setStretchFactor(1, 3); // Main views
+    mainSplitter->setStretchFactor(2, 1); // Map & Status
+    mainSplitter->setStretchFactor(3, 1); // Console
 
     setCentralWidget(mainSplitter);
-    resize(1200, 800);
+    resize(1400, 900);
 
     // Connect Data Distribution
     connect(m_appController, &AppController::dataUpdated, m_plotPanel, &PlotPanel::onDataFrameReceived);

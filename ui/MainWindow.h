@@ -2,7 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QTabWidget>
+#include <QSplitter>
 
 #include "AppController.h"
 #include "SerialController.h"
@@ -32,7 +32,6 @@ private:
     View3D* m_view3D;
     OrientationPanel* m_orientationPanel;
     MapView* m_mapView;
-    QTabWidget* m_tabWidget;
 
     ConsolePanel* m_consolePanel;
 };

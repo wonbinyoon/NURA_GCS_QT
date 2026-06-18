@@ -1,148 +1,146 @@
+#include <QLabel>
 #include "PlotPanel.h"
-#include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QScrollArea>
 
 PlotPanel::PlotPanel(QWidget* parent)
     : QWidget(parent) {
 
-    // Initialize Chart
-    m_chart = new QChart();
-    m_chart->setTitle("Telemetry Data");
-    m_chart->legend()->hide();
-    m_chart->setAnimationOptions(QChart::NoAnimation); // Important for high FPS
+    QWidget* scrollWidget = new QWidget(this);
+    QVBoxLayout* mainLayout = new QVBoxLayout(scrollWidget);
 
-    m_chartView = new QChartView(m_chart, this);
-    m_chartView->setRenderHint(QPainter::Antialiasing);
+    setupGroup(m_posAltGroup, "Position / Altitude", {"North", "East", "Down", "Altitude"});
+    setupGroup(m_velGroup, "Velocity", {"Vx", "Vy", "Vz"});
+    setupGroup(m_accGroup, "Acceleration", {"Ax", "Ay", "Az"});
+    setupGroup(m_imuGroup, "IMU", {"GyroX", "GyroY", "GyroZ", "MagX", "MagY", "MagZ"});
+    setupGroup(m_envGroup, "Environment", {"Pressure", "Temperature"});
 
-    // Initialize Axes
-    m_axisX = new QValueAxis();
-    m_axisX->setTitleText("Time (ext seq)");
-    m_axisX->setLabelFormat("%d");
-    m_chart->addAxis(m_axisX, Qt::AlignBottom);
+    mainLayout->addWidget(m_posAltGroup.view);
+    mainLayout->addWidget(m_velGroup.view);
+    mainLayout->addWidget(m_accGroup.view);
+    mainLayout->addWidget(m_imuGroup.view);
+    mainLayout->addWidget(m_envGroup.view);
 
-    m_axisY = new QValueAxis();
-    m_axisY->setTitleText("Value");
-    m_chart->addAxis(m_axisY, Qt::AlignLeft);
+    // Add checkboxes on the left
+    QVBoxLayout* checkLayout = new QVBoxLayout();
+    auto addChecks = [&](PlotGroup& group, const QString& title) {
+        checkLayout->addWidget(new QLabel(title));
+        for (auto* cb : group.checkboxes) checkLayout->addWidget(cb);
+    };
 
-    // Initialize Series
-    m_seriesAltitude = new QLineSeries();
-    m_seriesAltitude->setName("Altitude");
-    m_chart->addSeries(m_seriesAltitude);
-    m_seriesAltitude->attachAxis(m_axisX);
-    m_seriesAltitude->attachAxis(m_axisY);
+    addChecks(m_posAltGroup, "Pos/Alt");
+    addChecks(m_velGroup, "Velocity");
+    addChecks(m_accGroup, "Acceleration");
+    addChecks(m_imuGroup, "IMU");
+    addChecks(m_envGroup, "Environment");
+    checkLayout->addStretch();
 
-    m_seriesVelocityZ = new QLineSeries();
-    m_seriesVelocityZ->setName("Velocity Z");
-    m_chart->addSeries(m_seriesVelocityZ);
-    m_seriesVelocityZ->attachAxis(m_axisX);
-    m_seriesVelocityZ->attachAxis(m_axisY);
+    QScrollArea* scrollArea = new QScrollArea(this);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setWidget(scrollWidget);
 
-    m_seriesAccelZ = new QLineSeries();
-    m_seriesAccelZ->setName("Accel Z");
-    m_chart->addSeries(m_seriesAccelZ);
-    m_seriesAccelZ->attachAxis(m_axisX);
-    m_seriesAccelZ->attachAxis(m_axisY);
+    QHBoxLayout* rootLayout = new QHBoxLayout(this);
+    rootLayout->addLayout(checkLayout, 1);
+    rootLayout->addWidget(scrollArea, 4);
 
-    // Initialize UI Controls
-    m_checkAltitude = new QCheckBox("Altitude", this);
-    m_checkVelocityZ = new QCheckBox("Velocity Z", this);
-    m_checkAccelZ = new QCheckBox("Accel Z", this);
-
-    m_checkAltitude->setChecked(true);
-    m_checkVelocityZ->setChecked(true);
-    m_checkAccelZ->setChecked(true);
-
-    QVBoxLayout* controlsLayout = new QVBoxLayout();
-    controlsLayout->addWidget(m_checkAltitude);
-    controlsLayout->addWidget(m_checkVelocityZ);
-    controlsLayout->addWidget(m_checkAccelZ);
-    controlsLayout->addStretch();
-
-    QHBoxLayout* mainLayout = new QHBoxLayout(this);
-    mainLayout->addLayout(controlsLayout, 1);
-    mainLayout->addWidget(m_chartView, 4);
-
-    // Timer for 30 FPS rendering
     m_timer = new QTimer(this);
     connect(m_timer, &QTimer::timeout, this, &PlotPanel::onTimerTick);
     m_timer->start(33);
 }
 
+void PlotPanel::setupGroup(PlotGroup& group, const QString& title, const QStringList& seriesNames) {
+    group.chart = new QChart();
+    group.chart->setTitle(title);
+    group.chart->setAnimationOptions(QChart::NoAnimation);
+
+    group.view = new QChartView(group.chart);
+    group.view->setRenderHint(QPainter::Antialiasing);
+    group.view->setMinimumHeight(250);
+
+    group.axisX = new QValueAxis();
+    group.axisX->setTitleText("Time");
+    group.chart->addAxis(group.axisX, Qt::AlignBottom);
+
+    group.axisY = new QValueAxis();
+    group.axisY->setTitleText("Value");
+    group.chart->addAxis(group.axisY, Qt::AlignLeft);
+
+    for (const QString& name : seriesNames) {
+        auto* series = new QLineSeries();
+        series->setName(name);
+        group.chart->addSeries(series);
+        series->attachAxis(group.axisX);
+        series->attachAxis(group.axisY);
+        group.series.append(series);
+
+        auto* cb = new QCheckBox(name);
+        cb->setChecked(true);
+        group.checkboxes.append(cb);
+    }
+}
+
 void PlotPanel::onDataFrameReceived(const DataFrame& frame) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_buffer.push_back(frame);
-
-    // Limit buffer size to 1000 points
-    if (m_buffer.size() > 1000) {
+    if (m_buffer.size() > 500) {
         m_buffer.pop_front();
     }
 }
 
 void PlotPanel::onTimerTick() {
-    QList<QPointF> pointsAltitude;
-    QList<QPointF> pointsVelocityZ;
-    QList<QPointF> pointsAccelZ;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_buffer.empty()) return;
 
-    double minX = 0;
-    double maxX = 0;
-    double minY = -10.0; // Default scale bounds
-    double maxY = 10.0;
+    double minX = m_buffer.front().timestamp_ext;
+    double maxX = m_buffer.back().timestamp_ext;
 
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_buffer.empty()) {
-            return;
-        }
+    QList<QList<QPointF>> posAltData(4), velData(3), accData(3), imuData(6), envData(2);
+    double py[5][2] = {{1e9, -1e9}, {1e9, -1e9}, {1e9, -1e9}, {1e9, -1e9}, {1e9, -1e9}};
 
-        // Fast paths to avoid re-allocating internally
-        pointsAltitude.reserve(m_buffer.size());
-        pointsVelocityZ.reserve(m_buffer.size());
-        pointsAccelZ.reserve(m_buffer.size());
+    for (const auto& f : m_buffer) {
+        double x = f.timestamp_ext;
 
-        minX = m_buffer.front().timestamp_ext;
-        maxX = m_buffer.back().timestamp_ext;
+        // Pos/Alt
+        if (m_posAltGroup.checkboxes[0]->isChecked()) { posAltData[0].append(QPointF(x, f.position_ned[0])); py[0][0] = std::min(py[0][0], (double)f.position_ned[0]); py[0][1] = std::max(py[0][1], (double)f.position_ned[0]); }
+        if (m_posAltGroup.checkboxes[1]->isChecked()) { posAltData[1].append(QPointF(x, f.position_ned[1])); py[0][0] = std::min(py[0][0], (double)f.position_ned[1]); py[0][1] = std::max(py[0][1], (double)f.position_ned[1]); }
+        if (m_posAltGroup.checkboxes[2]->isChecked()) { posAltData[2].append(QPointF(x, f.position_ned[2])); py[0][0] = std::min(py[0][0], (double)f.position_ned[2]); py[0][1] = std::max(py[0][1], (double)f.position_ned[2]); }
+        if (m_posAltGroup.checkboxes[3]->isChecked()) { posAltData[3].append(QPointF(x, f.altitude)); py[0][0] = std::min(py[0][0], (double)f.altitude); py[0][1] = std::max(py[0][1], (double)f.altitude); }
 
-        for (const auto& frame : m_buffer) {
-            double x = static_cast<double>(frame.timestamp_ext);
+        // Vel
+        for(int i=0; i<3; ++i) if (m_velGroup.checkboxes[i]->isChecked()) { velData[i].append(QPointF(x, f.velocity_ned[i])); py[1][0] = std::min(py[1][0], (double)f.velocity_ned[i]); py[1][1] = std::max(py[1][1], (double)f.velocity_ned[i]); }
 
-            double alt = static_cast<double>(frame.altitude);
-            double vz = static_cast<double>(frame.velocity_ned[2]);
-            double az = static_cast<double>(frame.acceleration[2]);
+        // Acc
+        for(int i=0; i<3; ++i) if (m_accGroup.checkboxes[i]->isChecked()) { accData[i].append(QPointF(x, f.acceleration[i])); py[2][0] = std::min(py[2][0], (double)f.acceleration[i]); py[2][1] = std::max(py[2][1], (double)f.acceleration[i]); }
 
-            if (m_checkAltitude->isChecked()) {
-                pointsAltitude.append(QPointF(x, alt));
-                if (alt < minY) minY = alt;
-                if (alt > maxY) maxY = alt;
-            }
-            if (m_checkVelocityZ->isChecked()) {
-                pointsVelocityZ.append(QPointF(x, vz));
-                if (vz < minY) minY = vz;
-                if (vz > maxY) maxY = vz;
-            }
-            if (m_checkAccelZ->isChecked()) {
-                pointsAccelZ.append(QPointF(x, az));
-                if (az < minY) minY = az;
-                if (az > maxY) maxY = az;
-            }
+        // IMU
+        for(int i=0; i<3; ++i) if (m_imuGroup.checkboxes[i]->isChecked()) { imuData[i].append(QPointF(x, f.gyro[i])); py[3][0] = std::min(py[3][0], (double)f.gyro[i]); py[3][1] = std::max(py[3][1], (double)f.gyro[i]); }
+        for(int i=0; i<3; ++i) if (m_imuGroup.checkboxes[i+3]->isChecked()) { imuData[i+3].append(QPointF(x, f.mag[i])); py[3][0] = std::min(py[3][0], (double)f.mag[i]); py[3][1] = std::max(py[3][1], (double)f.mag[i]); }
+
+        // Env
+        if (m_envGroup.checkboxes[0]->isChecked()) { envData[0].append(QPointF(x, f.pressure)); py[4][0] = std::min(py[4][0], (double)f.pressure); py[4][1] = std::max(py[4][1], (double)f.pressure); }
+        if (m_envGroup.checkboxes[1]->isChecked()) { envData[1].append(QPointF(x, f.temperature)); py[4][0] = std::min(py[4][0], (double)f.temperature); py[4][1] = std::max(py[4][1], (double)f.temperature); }
+    }
+
+    updateGroup(m_posAltGroup, posAltData, minX, maxX, py[0][0], py[0][1]);
+    updateGroup(m_velGroup, velData, minX, maxX, py[1][0], py[1][1]);
+    updateGroup(m_accGroup, accData, minX, maxX, py[2][0], py[2][1]);
+    updateGroup(m_imuGroup, imuData, minX, maxX, py[3][0], py[3][1]);
+    updateGroup(m_envGroup, envData, minX, maxX, py[4][0], py[4][1]);
+}
+
+void PlotPanel::updateGroup(PlotGroup& group, const QList<QList<QPointF>>& data, double minX, double maxX, double minY, double maxY) {
+    for (int i = 0; i < group.series.size(); ++i) {
+        group.series[i]->setVisible(group.checkboxes[i]->isChecked());
+        if (group.checkboxes[i]->isChecked()) {
+            group.series[i]->replace(data[i]);
         }
     }
 
-    // Update chart logic
-    m_seriesAltitude->setVisible(m_checkAltitude->isChecked());
-    m_seriesVelocityZ->setVisible(m_checkVelocityZ->isChecked());
-    m_seriesAccelZ->setVisible(m_checkAccelZ->isChecked());
-
-    m_seriesAltitude->replace(pointsAltitude);
-    m_seriesVelocityZ->replace(pointsVelocityZ);
-    m_seriesAccelZ->replace(pointsAccelZ);
-
-    // Prevent collapsing axes
     if (minX == maxX) maxX = minX + 1;
-    if (minY == maxY) maxY = minY + 1;
+    if (minY >= maxY) { minY = -1; maxY = 1; }
+    double marginY = (maxY - minY) * 0.1;
 
-    // Add margin to Y
-    double yMargin = (maxY - minY) * 0.1;
-
-    m_axisX->setRange(minX, maxX);
-    m_axisY->setRange(minY - yMargin, maxY + yMargin);
+    group.axisX->setRange(minX, maxX);
+    group.axisY->setRange(minY - marginY, maxY + marginY);
 }
