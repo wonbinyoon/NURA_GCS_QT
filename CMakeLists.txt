@@ -1,41 +1,22 @@
 cmake_minimum_required(VERSION 3.16)
-project(AppControllerTest)
+project(RocketTelemetry)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 COMPONENTS Core Widgets SerialPort Charts 3DCore 3DRender 3DExtras REQUIRED)
 
-set(CMAKE_AUTOMOC ON)
-
-add_library(AppControllerLib STATIC
-    ui/AppController.cpp
-    ui/AppController.h
-    ui/MainWindow.cpp
-    ui/MainWindow.h
-    ui/SerialController.cpp
-    ui/SerialController.h
-    ui/ReplayController.cpp
-    ui/ReplayController.h
-    ui/PlotPanel.cpp
-    ui/PlotPanel.h
-    ui/View3D.cpp
-    ui/View3D.h
-    ui/OrientationPanel.cpp
-    ui/OrientationPanel.h
-    ui/MapView.cpp
-    ui/MapView.h
-    ui/StatusPanel.cpp
-    ui/StatusPanel.h
-    ui/ConsolePanel.cpp
-    ui/ConsolePanel.h
-)
-
-target_link_libraries(AppControllerLib PRIVATE Qt6::Core Qt6::Widgets Qt6::SerialPort Qt6::Charts Qt6::3DCore Qt6::3DRender Qt6::3DExtras)
-target_include_directories(AppControllerLib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_subdirectory(model)
+add_subdirectory(parser)
+add_subdirectory(simulator)
+add_subdirectory(logger)
+add_subdirectory(replay)
+add_subdirectory(ui)
+add_subdirectory(app)
 
 enable_testing()
 find_package(GTest REQUIRED)
-add_executable(AppControllerTestExec tests/app_controller_test.cpp)
-target_link_libraries(AppControllerTestExec PRIVATE AppControllerLib GTest::gtest_main Qt6::Core Qt6::Widgets Qt6::SerialPort Qt6::Charts Qt6::3DCore Qt6::3DRender Qt6::3DExtras)
+add_executable(AppControllerTestExec tests/app_controller_test.cpp tests/parser_test.cpp tests/test_pipeline.cpp)
+target_link_libraries(AppControllerTestExec PRIVATE ui logger simulator GTest::gtest_main)
+target_include_directories(AppControllerTestExec PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME AppControllerTest COMMAND AppControllerTestExec)
