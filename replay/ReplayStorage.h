@@ -7,6 +7,11 @@
 #include "../model/DataFrame.h"
 #include "../logger/DataLogger.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 class ReplayStorage {
 public:
     ReplayStorage();
@@ -25,8 +30,14 @@ public:
     const DataFrame* seekByTimestamp(uint32_t timestamp) const;
 
 private:
+#ifdef _WIN32
+    HANDLE file_handle_;
+    HANDLE mapping_handle_;
+    const void* mapped_data_;
+#else
     int fd_;
     void* mapped_data_;
+#endif
     size_t mapped_size_;
 
     const FileHeader* header_;
